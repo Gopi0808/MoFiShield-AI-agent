@@ -3,7 +3,7 @@
 **AI-powered DeFi protection using MetaMask Smart Accounts & Delegation on Monad**
 
 ## 🎯 Live Demo
-👉 **[Click to Open Live Demo]((https://gopi0808.github.io/MoFiShield-AI-agent/))**
+👉 **[Click to Open Live Demo](https://gopi0808.github.io/MoFiShield-AI-agent/)**
 
 ## 🚀 Features
 - ✅ **MetaMask Smart Accounts** integration
@@ -26,4 +26,4 @@
 4. Real-time monitoring and automatic execution
 
 ## 🔗 Links
-- **Live Demo**: (https://gopi0808.github.io/MoFiShield-AI-agent/)
+- **Live Demo**: ([(https://gopi0808.github.io/MoFiShield-AI-agent/)])
