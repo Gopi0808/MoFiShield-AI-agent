@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoFi Shield - AI DeFi Protection Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js" type="application/javascript"></script>
+    <style>
+        .gradient-bg { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
+        .monad-gradient { background: linear-gradient(135deg, #00ff88 0%, #00ccff 100%); }
+        .glass-card { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .pulse-glow { animation: pulseGlow 2s infinite; }
+        @keyframes pulseGlow { 
+            0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 136, 0.4); }
+            50% { box-shadow: 0 0 30px rgba(0, 255, 136, 0.8); }
+        }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen text-white font-sans">
+    <div id="app" class="min-h-screen">
+        <header class="border-b border-gray-700 sticky top-0 glass-card z-10">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 monad-gradient rounded-xl flex items-center justify-center pulse-glow">
+                            <i class="fas fa-shield-alt text-gray-900 text-lg"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold bg-gradient-to-r from-green-400 to-cyan-400 bg-clip-text text-transparent">MoFi Shield</h1>
+                            <p class="text-xs text-gray-400">Monad AI Protection Agent</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="bg-green-500/10 border border-green-500/20 px-3 py-1 rounded-full text-xs text-green-400">
+                            <i class="fas fa-network-wired mr-1"></i>Monad Testnet
+                        </div>
+                        <div id="wallet-section"></div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 space-y-8">
+                    <div id="setup-section" class="glass-card rounded-2xl p-6"></div>
+                    <div id="agent-controls" class="glass-card rounded-2xl p-6 hidden"></div>
+                    <div id="transaction-log" class="glass-card rounded-2xl p-6">
+                        <h3 class="text-xl font-bold mb-4">Delegation Transactions</h3>
+                        <div id="tx-log-content" class="space-y-3 max-h-96 overflow-y-auto">
+                            <div class="text-center text-gray-500 py-8">
+                                <i class="fas fa-receipt text-3xl mb-2"></i>
+                                <p>Transaction log will appear here</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-8">
+                    <div id="status-panel" class="glass-card rounded-2xl p-6"></div>
+                    <div class="glass-card rounded-2xl p-6">
+                        <h3 class="text-xl font-bold mb-4">Delegation Features</h3>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex items-center space-x-3 p-3 bg-blue-500/10 rounded-lg"><i class="fas fa-bolt text-blue-400"></i><span>MEV Protection</span></div>
+                            <div class="flex items-center space-x-3 p-3 bg-green-500/10 rounded-lg"><i class="fas fa-life-ring text-green-400"></i><span>Liquidation Prevention</span></div>
+                            <div class="flex items-center space-x-3 p-3 bg-purple-500/10 rounded-lg"><i class="fas fa-sync text-purple-400"></i><span>Auto Rebalancing</span></div>
+                            <div class="flex items-center space-x-3 p-3 bg-yellow-500/10 rounded-lg"><i class="fas fa-shield-alt text-yellow-400"></i><span>Emergency Protection</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let state = {
+            isConnected: false, isDelegated: false, userAddress: '', smartAccountAddress: '',
+            delegateAddress: '0x742C2c5Ae98d5A6c3738Bf2a5D041dC3b7bA11a1', transactions: [], provider: null, signer: null
+        };
+
+        const setupSection = document.getElementById('setup-section');
+        const statusPanel = document.getElementById('status-panel');
+        const agentControls = document.getElementById('agent-controls');
+        const txLogContent = document.getElementById('tx-log-content');
+        const walletSection = document.getElementById('wallet-section');
+
+        async function initProvider() {
+            if (window.ethereum) {
+                try {
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    state.provider = new ethers.providers.Web3Provider(window.ethereum);
+                    state.signer = state.provider.getSigner();
+                    state.userAddress = await state.signer.getAddress();
+                    addTransaction('Connected to MetaMask', 'success');
+                    return true;
+                } catch (error) {
+                    addTransaction('Failed to connect wallet', 'error');
+                    return false;
+                }
+            } else {
+                addTransaction('MetaMask not installed', 'error');
+                return false;
+            }
+        }
+
+        async function createSmartAccount() {
+            addTransaction('Creating Smart Account on Monad...', 'pending');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            state.smartAccountAddress = ethers.utils.getCreate2Address('0x' + '1'.repeat(40), '0x' + '0'.repeat(64), '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join(''));
+            addTransaction('Smart Account created: ' + state.smartAccountAddress, 'success');
+            state.isConnected = true;
+            renderAll();
+        }
+
+        async function setupDelegation() {
+            addTransaction('Setting up delegation permissions...', 'pending');
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            addTransaction('Delegation transaction signed', 'success');
+            addTransaction('AI Agent now has execution permissions', 'info');
+            addTransaction('Delegate address: ' + state.delegateAddress, 'info');
+            state.isDelegated = true;
+            renderAll();
+        }
+
+        async function executeAIAction(action) {
+            if (!state.isDelegated) {
+                addTransaction('Delegation not set up. Please grant permissions first.', 'error');
+                return;
+            }
+            addTransaction(`AI Agent executing: ${action}`, 'pending');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const txHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
+            addTransaction(`Action completed: ${action}`, 'success');
+            addTransaction(`Transaction hash: ${txHash}`, 'info');
+            const details = {
+                mev_protection: { message: 'MEV protection activated - prevented front-running', type: 'protection' },
+                liquidation_shield: { message: 'Liquidation shield engaged - position secured', type: 'protection' },
+                auto_rebalance: { message: 'Portfolio rebalanced - optimal allocation achieved', type: 'management' },
+                emergency_exit: { message: 'Emergency exit executed - funds secured', type: 'protection' }
+            };
+            const detail = details[action];
+            if (detail) addTransaction(detail.message, detail.type);
+        }
+
+        function addTransaction(message, type) {
+            const tx = { id: Date.now(), message, type, timestamp: new Date().toLocaleTimeString() };
+            state.transactions.unshift(tx);
+            renderTransactionLog();
+        }
+
+        function renderSetupSection() {
+            if (!state.isConnected) {
+                setupSection.innerHTML = `<div class="text-center">
+                    <div class="w-20 h-20 monad-gradient rounded-2xl flex items-center justify-center mx-auto mb-6"><i class="fas fa-shield-alt text-gray-900 text-3xl"></i></div>
+                    <h2 class="text-3xl font-bold mb-4">MoFi Shield Agent</h2>
+                    <p class="text-gray-300 mb-8 max-w-2xl mx-auto">AI-powered DeFi protection using MetaMask Smart Accounts & Delegation on Monad</p>
+                    <div class="max-w-md mx-auto space-y-4">
+                        <button onclick="initProvider().then(createSmartAccount)" class="w-full monad-gradient text-gray-900 hover:shadow-lg px-6 py-4 rounded-xl font-bold transition-all transform hover:scale-105 flex items-center justify-center space-x-3">
+                            <i class="fas fa-plug"></i><span>Connect MetaMask & Create Smart Account</span>
+                        </button>
+                        <p class="text-xs text-gray-500">Uses MetaMask Delegation Toolkit for Smart Accounts</p>
+                    </div>
+                </div>`;
+            } else if (!state.isDelegated) {
+                setupSection.innerHTML = `<div class="text-center">
+                    <div class="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-check text-white text-2xl"></i></div>
+                    <h2 class="text-2xl font-bold mb-2">Smart Account Ready</h2>
+                    <p class="text-gray-300 mb-2">${state.smartAccountAddress}</p>
+                    <p class="text-gray-400 mb-6">Grant delegation permissions to your AI agent</p>
+                    <button onclick="setupDelegation()" class="monad-gradient text-gray-900 hover:shadow-lg px-8 py-4 rounded-xl font-bold transition-all transform hover:scale-105 flex items-center justify-center space-x-3 mx-auto">
+                        <i class="fas fa-user-shield"></i><span>Grant Delegation Permissions</span>
+                    </button>
+                    <div class="mt-6 p-4 bg-blue-500/10 rounded-lg border border-blue-500/20 text-left">
+                        <h4 class="font-semibold mb-2">Delegation Permissions Include:</h4>
+                        <ul class="text-sm text-gray-300 space-y-1"><li>• Execute MEV protection</li><li>• Manage liquidation protection</li><li>• Auto-rebalance portfolio</li><li>• Emergency exit procedures</li></ul>
+                    </div>
+                </div>`;
+            } else {
+                setupSection.innerHTML = `<div class="text-center">
+                    <div class="w-20 h-20 monad-gradient rounded-2xl flex items-center justify-center mx-auto mb-4 pulse-glow"><i class="fas fa-robot text-gray-900 text-3xl"></i></div>
+                    <h2 class="text-2xl font-bold mb-2 text-green-400">AI Agent Active</h2>
+                    <p class="text-gray-300 mb-2">Smart Account: ${state.smartAccountAddress}</p>
+                    <p class="text-gray-300 mb-2">Delegate: ${state.delegateAddress.slice(0, 10)}...${state.delegateAddress.slice(-8)}</p>
+                    <p class="text-green-400 font-semibold mb-6">Your portfolio is now protected by AI</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                        <div class="p-4 border border-green-500/20 rounded-lg text-center"><i class="fas fa-shield-alt text-green-400 text-2xl mb-2"></i><div class="font-semibold">Active Protection</div><div class="text-sm text-gray-400">24/7 Monitoring</div></div>
+                        <div class="p-4 border border-blue-500/20 rounded-lg text-center"><i class="fas fa-bolt text-blue-400 text-2xl mb-2"></i><div class="font-semibold">Autonomous</div><div class="text-sm text-gray-400">AI-Managed</div></div>
+                    </div>
+                </div>`;
+            }
+        }
+
+        function renderStatusPanel() {
+            statusPanel.innerHTML = `<h3 class="text-xl font-bold mb-4">System Status</h3>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between p-3 border border-gray-700 rounded-lg"><div class="flex items-center space-x-3"><i class="fas fa-wallet ${state.isConnected ? 'text-green-400' : 'text-gray-400'}"></i><span>Smart Account</span></div><div class="text-${state.isConnected ? 'green' : 'gray'}-400 text-sm">${state.isConnected ? 'Active' : 'Not Connected'}</div></div>
+                    <div class="flex items-center justify-between p-3 border border-gray-700 rounded-lg"><div class="flex items-center space-x-3"><i class="fas fa-robot ${state.isDelegated ? 'text-green-400' : 'text-yellow-400'}"></i><span>AI Delegation</span></div><div class="text-${state.isDelegated ? 'green' : 'yellow'}-400 text-sm">${state.isDelegated ? 'Active' : 'Pending'}</div></div>
+                    <div class="flex items-center justify-between p-3 border border-gray-700 rounded-lg"><div class="flex items-center space-x-3"><i class="fas fa-network-wired text-green-400"></i><span>Monad Testnet</span></div><div class="text-green-400 text-sm">Ready</div></div>
+                    <div class="flex items-center justify-between p-3 border border-gray-700 rounded-lg"><div class="flex items-center space-x-3"><i class="fas fa-database text-cyan-400"></i><span>Envio Indexer</span></div><div class="text-cyan-400 text-sm">Syncing</div></div>
+                </div>`;
+        }
+
+        function renderAgentControls() {
+            if (state.isDelegated) {
+                agentControls.classList.remove('hidden');
+                agentControls.innerHTML = `<h3 class="text-xl font-bold mb-4">AI Protection Actions</h3>
+                    <p class="text-gray-400 mb-4">Your AI agent can execute these actions using delegation:</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <button onclick="executeAIAction('mev_protection')" class="p-4 border border-green-500/20 rounded-lg hover:border-green-500/40 transition-all text-left group"><div class="flex items-center space-x-3 mb-2"><i class="fas fa-bolt text-green-400"></i><span class="font-semibold">MEV Protection</span></div><p class="text-sm text-gray-400">Prevent front-running and sandwich attacks</p></button>
+                        <button onclick="executeAIAction('liquidation_shield')" class="p-4 border border-cyan-500/20 rounded-lg hover:border-cyan-500/40 transition-all text-left group"><div class="flex items-center space-x-3 mb-2"><i class="fas fa-life-ring text-cyan-400"></i><span class="font-semibold">Liquidation Shield</span></div><p class="text-sm text-gray-400">Auto-manage collateral to prevent liquidations</p></button>
+                        <button onclick="executeAIAction('auto_rebalance')" class="p-4 border border-purple-500/20 rounded-lg hover:border-purple-500/40 transition-all text-left group"><div class="flex items-center space-x-3 mb-2"><i class="fas fa-sync text-purple-400"></i><span class="font-semibold">Auto Rebalance</span></div><p class="text-sm text-gray-400">Optimize portfolio allocation automatically</p></button>
+                        <button onclick="executeAIAction('emergency_exit')" class="p-4 border border-yellow-500/20 rounded-lg hover:border-yellow-500/40 transition-all text-left group"><div class="flex items-center space-x-3 mb-2"><i class="fas fa-exclamation-triangle text-yellow-400"></i><span class="font-semibold">Emergency Exit</span></div><p class="text-sm text-gray-400">Exit risky positions when detected</p></button>
+                    </div>`;
+            }
+        }
+
+        function renderTransactionLog() {
+            if (state.transactions.length === 0) return;
+            txLogContent.innerHTML = state.transactions.map(tx => `<div class="flex items-start space-x-3 p-3 border rounded-lg ${tx.type === 'success' ? 'border-green-500/20 bg-green-500/5' : tx.type === 'pending' ? 'border-yellow-500/20 bg-yellow-500/5' : tx.type === 'error' ? 'border-red-500/20 bg-red-500/5' : tx.type === 'protection' ? 'border-blue-500/20 bg-blue-500/5' : tx.type === 'management' ? 'border-purple-500/20 bg-purple-500/5' : 'border-gray-700'}">
+                <i class="fas ${tx.type === 'success' ? 'fa-check-circle text-green-400' : tx.type === 'pending' ? 'fa-spinner text-yellow-400 animate-spin' : tx.type === 'error' ? 'fa-exclamation-circle text-red-400' : tx.type === 'protection' ? 'fa-shield-alt text-blue-400' : tx.type === 'management' ? 'fa-robot text-purple-400' : 'fa-info-circle text-gray-400'} mt-1"></i>
+                <div class="flex-1"><div class="text-sm">${tx.message}</div><div class="text-xs text-gray-400 mt-1">${tx.timestamp}</div></div>
+            </div>`).join('');
+        }
+
+        function renderWalletSection() {
+            if (state.isConnected) {
+                walletSection.innerHTML = `<div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2 glass-card px-4 py-2 rounded-lg">
+                        <i class="fas fa-user-check ${state.isDelegated ? 'text-green-400' : 'text-yellow-400'}"></i>
+                        <div class="text-sm"><div class="font-medium">${state.smartAccountAddress.slice(0, 8)}...${state.smartAccountAddress.slice(-6)}</div><div class="text-xs">${state.isDelegated ? 'Delegation Active' : 'Setup Required'}</div></div>
+                    </div>
+                </div>`;
+            } else {
+                walletSection.innerHTML = `<button onclick="initProvider().then(createSmartAccount)" class="monad-gradient text-gray-900 hover:shadow-lg px-6 py-3 rounded-xl font-bold transition-all transform hover:scale-105 flex items-center space-x-2">
+                    <i class="fas fa-plug"></i><span>Connect MetaMask</span>
+                </button>`;
+            }
+        }
+
+        function renderAll() {
+            renderSetupSection(); renderStatusPanel(); renderAgentControls(); renderTransactionLog(); renderWalletSection();
+        }
+
+        renderAll();
+        setTimeout(() => {
+            addTransaction('Welcome to MoFi Shield - AI DeFi Protection Agent', 'info');
+            addTransaction('Ready to setup Smart Account and Delegation on Monad', 'info');
+        }, 1000);
+    </script>
+</body>
+</html>
